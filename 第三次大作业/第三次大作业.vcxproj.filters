@@ -26,5 +26,16 @@
     <Text Include="temp1_eigenvalue.txt">
       <Filter>资源文件</Filter>
     </Text>
+    <Text Include="temp.txt">
+      <Filter>资源文件</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="fft.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="const.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

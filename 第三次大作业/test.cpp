@@ -3,15 +3,14 @@
 #include<fstream>
 #include<iostream>
 #include<complex>
+#include"fft.h"
+#include"const.h"
 using namespace std;
 using com = complex<double>;
 //x轴离散成2*N0个格子
-constexpr int N0 = 20000;
+constexpr int N0 = 16384;
 //x间隔为delta_x
 constexpr double delta_x = 0.1;
-//
-constexpr double E = 2.71828182845904523536028747;
-constexpr double PI = 3.14159265358979323846264338;
 //归一化
 template<int n>
 void normalize(com* x) {
@@ -217,10 +216,6 @@ com* generate_tf(double tx, double I, double omega, int N) {
 	return psai;
 }
 
-
-
-
-
 //求末态电离波函数(针对第(2)问)
 com* generate_psaif() {
 	//初始化激光数据
@@ -237,6 +232,7 @@ com* generate_psaif() {
 	for (int i = 0; i < 2 * N0 - 1; i++) {
 		p += conj(psai0[i])*psaif[i]*delta_x;
 	}
+	cout << abs(p)*abs(p);//!!!!!!!!
 	//减去基态部分
 	for (int i = 0; i < 2 * N0 - 1; i++) {
 		psaif[i] = psaif[i] - p * psai0[i];
@@ -244,18 +240,6 @@ com* generate_psaif() {
 	delete[] psai0;
 	return psaif;
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //第1问测试函数
@@ -290,7 +274,27 @@ void test1() {
 	cout << psai0.val << endl;
 	delete[] u;
 }
-//
+//!!!!!!!!!!!!!
+void test2() {
+	//为了保证数据点个数是2的幂次,我们增加一个点
+	com* temp = generate_psaif();
+	com* psaif = new com[2 * N0];
+	psaif[2 * N0 - 1] = 0;
+	for (int i = 0; i < 2 * N0 - 1; i++) {
+		psaif[i] = temp[i];
+	}
+	delete[] temp;
+	com* momentum = new com[2 * N0];
+	delete[] psaif;
+	fft<2 * N0>(temp, momentum);
+	for (int i = 0; i < 2 * N0 ; i++) {
+		momentum[i] = momentum[i]/delta_x;
+	}
+	for (int i = 0; i < 2 * N0; i++) {
+		cout<<momentum[i] << endl;
+	}
+}
+
 
 void testexp() {
 	constexpr int n = 10000000;
@@ -315,6 +319,7 @@ void testexp() {
 	com* x = solve_eq<n>(C, b);
 	print_sol<n>(x);
 }
+
 int main() {
 	generate_psaif();
 	system("pause");
