@@ -11,6 +11,7 @@ constexpr int N0 = 20000;
 constexpr double delta_x = 0.1;
 //
 constexpr double E = 2.71828182845904523536028747;
+constexpr double PI = 3.14159265358979323846264338;
 //归一化
 template<int n>
 void normalize(com* x) {
@@ -128,8 +129,9 @@ void absorb(com A[n]) {
 }
 
 //波函数传播delta_t
+//其中I(10^16为单位),omega(原子单位),N是激光场参数
 template<int n>
-void Udelta_t(com psai[n],double t) {
+void Udelta_t(com psai[n],double t,double I,double omega,int N,double delta_t) {
 	//构造哈密顿量H,装在C中
 	com(*C)[2] = new com[n][2];
 	//constexpr int n = 2 * N0 - 1;
@@ -138,17 +140,17 @@ void Udelta_t(com psai[n],double t) {
 	for (int i = 1; i < n; i++) {//构造非对角元
 		C[i][0] = -0.5 / pow(delta_x, 2);
 	}
-	const double sqrtI;
-	const double omega;
-	const int N;
+	//带入原子单位换算公式求sqrt(I)
+	const double sqrtI=sqrt(I/3.5094448314);
 	for (int i = 0; i < n; i++) {//构造对角元
 		x += delta_x;
-		C[i][1] = x*sqrtI*pow(sin(omega*t/2/N),2)*sin(omega*t)
-			+1 / pow(delta_x, 2) - 1 / sqrt(2 + pow(x, 2)) + 0.48;
+		C[i][1] = x*sqrtI*pow(sin(omega*t/2./N),2)*sin(omega*t)
+			+1 / pow(delta_x, 2) - 1 / sqrt(2 + pow(x, 2)) ;
 	}
 	for (int i = 0; i < n; i++) {//*0.5*i*delta_t
-		C[i][1] = C[i][1] * (-0.5*delta_t*com(0,1));
-		C[i][0] = C[i][0] * (-0.5*delta_t*com(0, 1));
+		com i0{ 0.,1. };
+		C[i][1] = C[i][1] * (-0.5*delta_t*i0);
+		C[i][0] = C[i][0] * (-0.5*delta_t*i0);
 	}
 
 
@@ -157,19 +159,20 @@ void Udelta_t(com psai[n],double t) {
 	for (int i = 0; i < n; i++) {
 		psai_temp[i] = psai[i];
 	}
-	for (int k = 1; k < n + 1; k++) {//开始计算
-		psai[k] = psai_temp[k] * (1 - C[k][1]) - psai_temp[k - 1] * C[k][0] - psai_temp[k + 1] * C[k + 1][0];
+	for (int k = 1; k < n ; k++) {//开始计算
+		psai[k] = psai_temp[k] * (1. - C[k][1]) - psai_temp[k - 1] * C[k][0] - psai_temp[k + 1] * C[k + 1][0];
 	}
-	psai[0]= psai_temp[0] * (1 - C[0][1]) - psai_temp[1] * C[1][0];//计算端点值
-	psai[n-1]= psai_temp[n-1] * (1 - C[n-1][1]) - psai_temp[n-2] * C[n-1][0];
+	psai[0]= psai_temp[0] * (1. - C[0][1]) - psai_temp[1] * C[1][0];//计算端点值
+	psai[n-1]= psai_temp[n-1] * (1. - C[n-1][1]) - psai_temp[n-2] * C[n-1][0];
 	//计算psai*(1+0.5*i*H*delta_t)^-1
 	for (int i = 0; i < n; i++) {//临时储存psai
 		psai_temp[i] = psai[i];
 	}
 	for (int i = 0; i < n; i++) {//构造系数矩阵(1+0.5*i*H*delta_t)
-		C[i][1] = 1 + C[i][1];
+		C[i][1] = 1. + C[i][1];
 	}
-	psai = solve_eq(C, psai_temp);//开始计算
+	delete[] psai;
+	psai = solve_eq<n>(C, psai_temp);//开始计算
 	delete[] C;
 	delete[] psai_temp;
 }
@@ -198,20 +201,63 @@ com* generate_t0() {
 	delete[] u,C;
 	return psai0.vec;
 }
-//生成tf态波函数
-com* generate_tf() {
+//生成tx时刻波函数
+com* generate_tf(double tx, double I, double omega, int N) {
 	//t间隔delta_t
-	const double delta_t = 0.05;//!!!!
-	//t总长度tf
-	const double tf=10;//!!!!!!!
-	//波函数
+	const double delta_t = 0.5;//!!!!
+	//获得基态波函数
 	com* psai = generate_t0();
-	for (double t = 0; t < tf + delta_t; t += delta_t) {
-		Udelta_t<2*N0-1>(psai, t);//波函数传播
+	for (double t = 0; t < tx + delta_t; t += delta_t) {
+		Udelta_t<2*N0-1>(psai, t,I,omega,N,delta_t);//波函数传播
 		absorb<2 * N0 - 1>(psai);//乘吸收函数
+		if(1){
+			cout << psai[N0] <<"  "<<norm(psai[N0])<< endl;//!!!!!!!
+		}
 	}
 	return psai;
 }
+
+
+
+
+
+//求末态电离波函数(针对第(2)问)
+com* generate_psaif() {
+	//初始化激光数据
+	double I = 1.;
+	double omega = 1.;
+	int N = 18;
+	double tf = 2 * N*PI / omega;
+	//末态波函数
+	com* psaif = generate_tf(tf, I, omega, N);
+	//初态波函数
+	com* psai0 = generate_t0();
+	//基态概率幅p
+	com p=0;
+	for (int i = 0; i < 2 * N0 - 1; i++) {
+		p += conj(psai0[i])*psaif[i]*delta_x;
+	}
+	//减去基态部分
+	for (int i = 0; i < 2 * N0 - 1; i++) {
+		psaif[i] = psaif[i] - p * psai0[i];
+	}
+	delete[] psai0;
+	return psaif;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //第1问测试函数
 void test1() {
 	fstream os;
@@ -270,7 +316,6 @@ void testexp() {
 	print_sol<n>(x);
 }
 int main() {
-	com* x = generate_t0();
-	print_sol<2*N0+1>(x);
+	generate_psaif();
 	system("pause");
 }
