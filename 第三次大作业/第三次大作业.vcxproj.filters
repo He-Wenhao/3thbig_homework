@@ -29,6 +29,18 @@
     <Text Include="temp.txt">
       <Filter>资源文件</Filter>
     </Text>
+    <Text Include="temp2_Pt.txt">
+      <Filter>资源文件</Filter>
+    </Text>
+    <Text Include="temp2_k.txt">
+      <Filter>资源文件</Filter>
+    </Text>
+    <Text Include="temp3_a.txt">
+      <Filter>资源文件</Filter>
+    </Text>
+    <Text Include="temp3_d.txt">
+      <Filter>资源文件</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fft.h">

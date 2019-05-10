@@ -121,6 +121,10 @@
     <Text Include="temp.txt" />
     <Text Include="temp1.txt" />
     <Text Include="temp1_eigenvalue.txt" />
+    <Text Include="temp2_k.txt" />
+    <Text Include="temp2_Pt.txt" />
+    <Text Include="temp3_a.txt" />
+    <Text Include="temp3_d.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="const.h" />

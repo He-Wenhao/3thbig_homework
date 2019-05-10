@@ -175,6 +175,9 @@ void Udelta_t(com psai[n],double t,double I,double omega,int N,double delta_t) {
 	delete[] C;
 	delete[] psai_temp;
 }
+
+
+
 //生成t=0的波函数
 com* generate_t0() {
 	//构造三对角型的系数矩阵A,装在C中
@@ -203,7 +206,7 @@ com* generate_t0() {
 //生成tx时刻波函数
 com* generate_tf(double tx, double I, double omega, int N) {
 	//t间隔delta_t
-	const double delta_t = 0.5;//!!!!
+	const double delta_t = 0.05;//!!!!
 	//获得基态波函数
 	com* psai = generate_t0();
 	for (double t = 0; t < tx + delta_t; t += delta_t) {
@@ -216,17 +219,33 @@ com* generate_tf(double tx, double I, double omega, int N) {
 	return psai;
 }
 
-//求末态电离波函数(针对第(2)问)
+//求末态电离波函数(针对第(2)问)并且输出每一时刻的布居数
 com* generate_psaif() {
+	fstream os;
+	os.open( "temp2_Pt.txt" );
 	//初始化激光数据
 	double I = 1.;
 	double omega = 1.;
 	int N = 18;
 	double tf = 2 * N*PI / omega;
-	//末态波函数
-	com* psaif = generate_tf(tf, I, omega, N);
+	//t迭代步长delta_t
+	const double delta_t = 0.05;
 	//初态波函数
 	com* psai0 = generate_t0();
+	//求末态波函数,并输出每一时刻的布居数
+	//!!!!!!!!com* psaif = generate_tf(tf, I, omega, N);
+	com* psaif = generate_t0();
+	for (double t = 0; t < tf + delta_t; t += delta_t) {
+		Udelta_t<2 * N0 - 1>(psaif, t, I, omega, N, delta_t);//波函数传播
+		absorb<2 * N0 - 1>(psaif);//乘吸收函数
+		//输出时间&布居数
+		com p = 0;
+		for (int i = 0; i < 2 * N0 - 1; i++) {
+			p += conj(psai0[i])*psaif[i] * delta_x;
+		}
+		os <<t<<"\t"<< abs(p)*abs(p)<<endl;
+		cout << t << endl;//!!!!!!!!!
+	}
 	//基态概率幅p
 	com p=0;
 	for (int i = 0; i < 2 * N0 - 1; i++) {
@@ -241,6 +260,34 @@ com* generate_psaif() {
 	return psaif;
 }
 
+//求动量谱(针对第(2)问)
+void momentum_distribute() {
+	fstream osk;
+	osk.open("temp2_k.txt");
+	//输出每一时刻的布居数
+	//并且输出末态电离函数
+	com* psaif = generate_psaif();
+	//k的步长
+	const double delta_k = 0.05;
+	//输出动量谱
+	com pk = 0.;
+	double x = -N0 * delta_x;
+	for (double k = -2.5; k < 2.5; k += delta_k) {
+		//动量概率幅
+		pk = 0.;
+		x = -N0 * delta_x;
+		for (int i = 0; i < 2 * N0 - 1; i++) {
+			x += delta_x;
+			pk += psaif[i] * pow(E, -com{ 0.,1. }*k*x)*delta_x;
+		}
+		osk << k << "\t" << abs(pk)*abs(pk) << endl;
+	}
+	delete[] psaif;
+}
+//第2问测试函数
+void test2() {
+	momentum_distribute();
+}
 
 //第1问测试函数
 void test1() {
@@ -274,8 +321,143 @@ void test1() {
 	cout << psai0.val << endl;
 	delete[] u;
 }
+
+//求电偶极矩和t的函数
+com* generate_dt(int Ndata) {
+	//初始化激光数据
+	double I = 0.02;
+	double omega300 = 45.5633525316/300;
+	int N = 48;
+	double tf = 2 * N*PI / omega300;
+	//对应的delta_t
+	double delta_t = tf / Ndata;
+	com* dt = new com[Ndata];	
+	com* psai = generate_t0();
+	double t = 0;
+	for (int i = 0; i < Ndata;i++) {
+		Udelta_t<2 * N0 - 1>(psai, t, I, omega300, N, delta_t);//波函数传播
+		absorb<2 * N0 - 1>(psai);//乘吸收函数
+		//求t时刻dt
+		double x = -N0 * delta_x;
+		for (int j = 0; j < 2 * N0 - 1; j++) {
+			x += delta_x;
+			dt[i] += conj(psai[j])*psai[j]*x * delta_x;
+		}
+		t += delta_t;
+		if (i % 100 == 0) {//!!!!!!!!!!!!!
+			cout << i << endl;
+		}
+	}
+	//!!!!!!!!!!!
+	fstream otemp;
+	otemp.open("temp.txt");
+	double t_temp = 0;
+	for (int i = 0; i < Ndata; i++) {
+		otemp <<t_temp<<"\t"<< abs(dt[i]) << endl;
+		t_temp += delta_t;
+	}
+	delete[] psai;
+	return dt;
+}
+
+//求加速度和t的函数
+com* generate_at(int Ndata) {
+	//初始化激光数据
+	double I = 0.02;
+	double omega300 = 45.5633525316 / 300;
+	int N = 48;
+	double tf = 2 * N*PI / omega300;
+	double sqrtI = sqrt(I / 3.5094448314);
+	//对应的delta_t
+	double delta_t = tf / Ndata;
+	com* at = new com[Ndata];
+	com* psai = generate_t0();
+	double t = 0;
+	for (int i = 0; i < Ndata; i++) {
+		Udelta_t<2 * N0 - 1>(psai, t, I, omega300, N, delta_t);//波函数传播
+		absorb<2 * N0 - 1>(psai);//乘吸收函数
+		//求t时刻at
+		double x = -N0 * delta_x;
+		for (int j = 0; j < 2 * N0 - 1; j++) {
+			x += delta_x;
+			//受力算符 -dV/dx+E
+			com F = -x / pow(x*x + 2, 1.5) + sqrtI * pow(sin(omega300*t / 2. / N), 2)*sin(omega300*t);
+			at[i] += conj(psai[j])*psai[j] *F* delta_x;
+		}
+		t += delta_t;
+		if (i % 100 == 0) {//!!!!!!!!!!!!!
+			cout << i << endl;
+		}
+	}
+	delete[] psai;
+	return at;
+}
+
+//利用电偶极矩输出辐射谱
+void A_by_d() {
+	fstream os;
+	os.open("temp3_d.txt");
+	//取4096个数据点
+	const int Ndata = 4096;
+	//激光数据
+	int N = 48;
+	double omega300 = 45.5633525316 / 300;
+	double tf = 2 * N*PI / omega300;
+	//求辐射谱
+	com* dt = generate_dt(Ndata);
+	com* A=new com[Ndata];
+	fft<Ndata>(dt, A);//做fft
+	//乘上系数并输出
+	double omega = 0;
+	double delta_omega = 2 * PI / tf;
+	for (int i = 0; i < Ndata; i++) {
+		A[i]=-1 / sqrt(2 * PI)*pow(omega, 2)*A[i];
+		//输出omega/omega300 , log10A
+		os << omega/omega300 <<"\t"<< log10(norm(A[i]))<<endl;
+		omega += delta_omega;
+	}
+
+	delete[] dt,A;
+}
+
+//利用加速度输出辐射谱
+void A_by_a() {
+	fstream os;
+	os.open("temp3_a.txt");
+	//取4096个数据点
+	const int Ndata = 4096;
+	//激光数据
+	int N = 48;
+	double omega300 = 45.5633525316 / 300;
+	double tf = 2 * N*PI / omega300;
+	//求辐射谱
+	com* at = generate_at(Ndata);
+	com* A = new com[Ndata];
+	fft<Ndata>(at, A);//做fft
+	//乘上系数并输出
+	double omega = 0;
+	double delta_omega = 2 * PI / tf;
+	for (int i = 0; i < Ndata; i++) {
+		A[i] = 1 / sqrt(2 * PI)*A[i];
+		//输出omega/omega300 , log10A
+		os << omega / omega300 << "\t" << log10(norm(A[i])) << endl;
+		omega += delta_omega;
+	}
+
+	delete[] at, A;
+}
+
+//第3问测试函数
+void test3() {
+	//A_by_d();
+	A_by_a();
+}
+
+
+
+
 //!!!!!!!!!!!!!
-void test2() {
+void testexp2() {
 	//为了保证数据点个数是2的幂次,我们增加一个点
 	com* temp = generate_psaif();
 	com* psaif = new com[2 * N0];
@@ -320,7 +502,10 @@ void testexp() {
 	print_sol<n>(x);
 }
 
+
 int main() {
-	generate_psaif();
+	test3();
 	system("pause");
 }
+
+
