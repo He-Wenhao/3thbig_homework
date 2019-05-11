@@ -125,6 +125,7 @@
     <Text Include="temp2_Pt.txt" />
     <Text Include="temp3_a.txt" />
     <Text Include="temp3_d.txt" />
+    <Text Include="temp4.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="const.h" />
