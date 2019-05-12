@@ -567,6 +567,8 @@ int main() {
 	//testbug3();
 	test4_usefft();
 	system("pause");
+	;
+	;
 }
 
 
