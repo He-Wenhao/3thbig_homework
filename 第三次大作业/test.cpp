@@ -179,16 +179,17 @@ void Udelta_t(com psai[2*N0-1], double t, double I, double omega, int N, double 
 		C[i][1] = 1. + C[i][1];
 	}
 
-
-	//delete[] psai;
-	//psai = solve_eq<n>(C, psai_temp);//开始计算
-
+	/*
+	delete[] psai;
+	psai = nullptr;
+	psai = solve_eq<n>(C, psai_temp);//开始计算
+	*/
 	com* temp_solve = solve_eq<n>(C, psai_temp);
 	for (int i = 0; i < n; i++) {
 		psai[i] = temp_solve[i];
 	}
 	delete[] temp_solve;
-
+	
 	delete[] C;
 	delete[] psai_temp;
 }
@@ -480,7 +481,7 @@ void test3() {
 //第四问测试函数
 void test4() {
 	ofstream os4;
-	os4.open( "temp4.txt" );
+	os4.open( "temp4.txt" );//!!!!!!!!!!!!!!!!!!!!
 	//初始化激光数据
 	double I = 0.01;
 	double omega400 = 45.5633525316 / 400;
@@ -489,7 +490,7 @@ void test4() {
 	//迭代数据
 	constexpr int N0 = 16384;//取2N0-1个坐标点
 	double delta_x = 0.1;
-	int Ndata = 400;//取400个时间点
+	int Ndata = 400;//取800个时间点!!!!!!!!!!!!!!!!!!!!!
 	double delta_t = tf / Ndata;
 	//输出的omega步长
 	double delta_omega = omega400 / 20;
@@ -508,112 +509,29 @@ void test4() {
 	}
 }
 
-
-
-void testexp() {
-	constexpr int n = 10000000;
-	com* b = new com[n];
-	b[0] = 60;
-	b[n - 1] = 60;
-	for (int i = 1; i < n - 1; i++) {
-		b[i] = 120;
-	}
-	static com C[n][2];
-	C[0][0] = 0;
-	C[0][1] = 5;
-	C[n - 1][1] = 5;
-	for (int i = 1; i <= n - 2; i++) {
-		C[i][1] = 6;
-	}
-	for (int i = 1; i <= n - 1; i++) {
-		C[i][0] = 4;
-	}
-
-
-	com* x = solve_eq<n>(C, b);
-	print_sol<n>(x);
-}
-
-
-void testbug() {
-	
-	constexpr int N0 = 7000;//取2N0-1个坐标点
-	double delta_x = 0.1;
-	int Ndata = 400;//取400个时间点
-	double I = 0.01;
-	double omega = 45.5633525316 / 400;
-	int N = 4;
-	double tf = 2 * N*PI / omega;
-	double sqrtI = sqrt(I / 3.5094448314);
-	//对应的delta_t
-	double delta_t = tf / Ndata;
-	
-
-
-	com* psai = generate_t0<N0>(delta_x);
-
-
-	cout << sizeof(psai)/sizeof(com) <<"!!!!!!!!"<< endl;
-
-	double t = 0;
-	for (double t=0; t < tf; t+=delta_t) {
-		Udelta_t<N0>(psai, t, I, omega, N, delta_t, delta_x);//波函数传播
-		absorb<2 * N0 - 1>(psai, delta_x);//乘吸收函数
-
-		
-		cout << t << endl;
-		
-	}
-
-
-	delete[] psai;
-}
-
-void testbug2() {
-
-	//x轴离散成2*N0个格子
-	constexpr int N0 = 16384;
-	//x间隔为delta_x
-	constexpr double delta_x = 0.1;
-	//初始化激光数据
-	double I = 1.;
-	double omega = 1.;
-	int N = 18;
-	double tf = 2 * N*PI / omega;
-	//t迭代步长delta_t
-	const double delta_t = 0.05;
-
-	com* psai = generate_t0<N0>(delta_x);
-
-	cout << sizeof(psai) / sizeof(com) << "!!!!!!!!" << endl;
-
-	for (double t = 0; t < tf + delta_t; t += delta_t) {
-		Udelta_t<N0>(psai, t, I, omega, N, delta_t, delta_x);//波函数传播
-		absorb<2 * N0 - 1>(psai, delta_x);//乘吸收函数
-
-		cout << t << endl;//!!!!!!!!!
-	}
-}
-
-void testbug3() {
+//第四问测试函数
+void test4_usefft() {
 	ofstream os4;
-	os4.open("temp.txt");
+	os4.open("temp.txt");//!!!!!!!!!!!!!!!!!!!!
 	//初始化激光数据
 	double I = 0.01;
 	double omega400 = 45.5633525316 / 400;
 	int N = 4;
 	double tf = 2 * N*PI / omega400;
 	//迭代数据
-	constexpr int N0 = 600000;//取2N0-1个坐标点
+	constexpr int N0 = 16384;//取2N0-1个坐标点
 	double delta_x = 0.1;
-	int Ndata = 400;//取400个时间点
+	constexpr int Ndata = 512;//取800个时间点!!!!!!!!!!!!!!!!!!!!!
 	double delta_t = tf / Ndata;
 	//输出的omega步长
 	double delta_omega = omega400 / 20;
 	//生成加速度
 	com* at = generate_at<N0>(Ndata, delta_x, I, omega400, N);
 	//输出功率谱
+	/*
 	for (double omega = 0; omega < 20 * omega400; omega += delta_omega) {
+		
+
 		for (double t0 = 0; t0 <= tf; t0 += delta_t) {
 			com A = 0;
 			double t = 0;
@@ -622,12 +540,32 @@ void testbug3() {
 			}
 			os4 << t0 << "\t" << omega / omega400 << "\t" << log10(norm(A)) << endl;
 		}
+	}*/
+	for (int t0 = 0; t0 <= tf; t0 += tf / 20) {
+		com* a_temp = new com[Ndata];
+		com* result = new com[Ndata];
+		double t = 0;
+		for (int i = 0; i < Ndata; i++) {
+			a_temp[i] = at[i] * pow(E, -pow((t - t0), 2) / 2. / 15. / 15.);
+			t += delta_t;
+		}
+		fft<Ndata>(a_temp, result);
+		int k = 0;
+		for (double omega = 0; omega < 20 * omega400; omega += 2 * PI / tf) {
+			os4 << t0 << "\t" << omega / omega400 << "\t" << log10(norm(result[k])) << endl;
+			k++;
+		}
+		delete[] a_temp, result;
+		cout << t0 / tf * 20 << endl;//!!!!!!!!!
 	}
+	delete[] at;
 }
 
+
+
 int main() {
-	testbug3();
-	//test4();
+	//testbug3();
+	test4_usefft();
 	system("pause");
 }
 
