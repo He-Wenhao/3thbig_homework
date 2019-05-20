@@ -2,7 +2,7 @@
 #include<complex>
 #include"const.h"
 using com = std::complex<double>;
-//FFT
+//快速傅里叶变换的实现
 
 //递归
 template<int n>//n必须为2的幂次

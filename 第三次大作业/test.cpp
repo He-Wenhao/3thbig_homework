@@ -1,40 +1,21 @@
 ﻿#include<algorithm>
-#include<iostream>
 #include<fstream>
 #include<iostream>
+#include<iomanip>
 #include<complex>
 #include"fft.h"
 #include"const.h"
+#include"my_func.h"
 using namespace std;
 using com = complex<double>;
-//x轴离散成2*N0个格子
-//constexpr int N0 = 16384;
-//x间隔为delta_x
-//constexpr double delta_x = 0.1;
-//归一化
-template<int n>
-void normalize(com* x,double delta_x) {
-	double norm=0;
-	for (int i = 0; i < n; i++) {
-		norm += pow(abs(x[i]),2)*delta_x;
-	}
-	norm = sqrt(norm);
-	for (int i = 0; i < n; i++) {
-		x[i] = x[i] / norm;
-	}
-}
-//特征矢+特征值
-struct eigen {
-	com* vec;
-	double val;
-};
-//打印向量
-template<int n>
-void print_sol(com x[n]) {
-	for (int i = 0; i < n; i++) { cout << i + 1 << "   " << x[i] << endl; }
-}
 
-//解对称三对角线性方程组
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//第(1)问
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+//解对称三对角线性方程组(带状正定的直接解法)
 template<int n>
 com* solve_eq(com c_[n][2], com b_[n]) {
 	
@@ -75,7 +56,7 @@ com* solve_eq(com c_[n][2], com b_[n]) {
 	return b;
 }
 
-//反幂法求本征问题
+//反幂法求eigen{本征矢,本征值}
 template<int N>
 eigen inver_exp(com C[2*N-1][2], com u_[2*N-1]) {
 	//初始化u,lambda
@@ -109,7 +90,7 @@ eigen inver_exp(com C[2*N-1][2], com u_[2*N-1]) {
 		}
 	}
 	delete[] v;
-	return eigen{ u,abs(lambda) };
+	return eigen{ u,lambda.real() };
 }
 
 
@@ -123,10 +104,7 @@ void absorb(com A[n],double delta_x) {
 		x += delta_x;
 		if (abs(x) > x0) {
 			com temp = pow(E, -pow((abs(x) - x0) / 0.2, 2));
-
 			com temp2 = A[i];
-
-
 			A[i] = temp2 * temp;
 		}
 
@@ -134,21 +112,101 @@ void absorb(com A[n],double delta_x) {
 }
 
 
+
+
+//生成t=0的波函数
+template<int N0>
+com* generate_t0(double delta_x) {
+	//构造三对角型的系数矩阵H,装在C中
+	com (*C)[2]=new com[2*N0-1][2];
+	constexpr int n = 2 * N0 - 1;
+	C[0][0] = 0;
+	double x = -N0 * delta_x;
+	for (int i = 1; i < n; i++) {//构造非对角元
+		C[i][0] = -0.5 / pow(delta_x, 2);
+	}
+	for (int i = 0; i < n; i++) {//构造对角元
+		x += delta_x;
+		C[i][1] = 1 / pow(delta_x, 2) - 1 / sqrt(2 + pow(x, 2)) + 0.48;
+	}
+	//u 为初始向量
+	com* u = new com[n];
+	for (int i = 0; i < n; i++) {
+		u[i] = 1 / sqrt(2 * N0*delta_x);
+	}
+	//解本征问题
+	eigen psai0 = inver_exp<N0>(C, u);
+	//归一化
+	normalize<n>(psai0.vec,delta_x);
+	delete[] u,C;
+	return psai0.vec;
+}
+
+//第1问测试函数
+void test1() {
+	//x轴离散成2*N0个格子
+	constexpr int N0 = 16384;
+	//x间隔为delta_x
+	constexpr double delta_x = 0.1;
+	fstream os;
+	os.open("temp1.txt");
+	//构造三对角型的系数矩阵H,装在C中
+	static com C[2 * N0 - 1][2];
+	constexpr int n = 2 * N0 - 1;
+	C[0][0] = 0;
+	double x = -N0 * delta_x;
+	for (int i = 1; i < n; i++) {//构造非对角元
+		C[i][0] = -0.5 / pow(delta_x, 2);
+	}
+	//注意:
+	//这里加上了位移0.48
+	//故最后结果要减去0.48
+	for (int i = 0; i < n; i++) {//构造对角元
+		x += delta_x;
+		C[i][1] = 1 / pow(delta_x, 2) - 1 / sqrt(2 + pow(x, 2)) + 0.48;
+	}
+	//u 为反幂法中的初始向量
+	com* u = new com[n];
+	for (int i = 0; i < n; i++) {
+		u[i] = 1 / sqrt(2 * N0*delta_x);
+	}
+	//反幂法求本征问题
+	eigen psai0 = inver_exp<N0>(C, u);
+	normalize<n>(psai0.vec, delta_x);
+	//输出概率分布
+	x = -N0 * delta_x;
+	for (int i = 0; i < n; i++) {
+		x += delta_x;
+		os << x << "  " << pow(abs(psai0.vec[i]), 2) << endl;
+	}
+	//输出本征值
+	fstream osval;
+	osval.open("temp1_eigenvalue.txt");
+	osval <<setprecision(7) <<psai0.val-0.48 << endl;
+	delete[] u;
+}
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//第二问
+
 //波函数传播delta_t
 //其中I(10^16为单位),omega(原子单位),N是激光场参数
 template<int N0>
-void Udelta_t(com psai[2*N0-1], double t, double I, double omega, int N, double delta_t,double delta_x) {
+void Udelta_t(com psai[2 * N0 - 1], double t, double I, double omega, int N, double delta_t, double delta_x) {
 	constexpr int n = 2 * N0 - 1;
 	//构造哈密顿量H,装在C中
 	com(*C)[2] = new com[n][2];
-	//constexpr int n = 2 * N0 - 1;
 	C[0][0] = 0;
 	double x = -N0 * delta_x;//x是坐标
 	for (int i = 1; i < n; i++) {//构造非对角元
 		C[i][0] = -0.5 / pow(delta_x, 2);
 	}
-	//带入原子单位换算公式求sqrt(I)
-	const double sqrtI = sqrt(I / 3.5094448314);
+	const double sqrtI = sqrt(I / 3.5094448314);//求sqrt(I)
 	for (int i = 0; i < n; i++) {//构造对角元
 		x += delta_x;
 		C[i][1] = x * sqrtI*pow(sin(omega*t / 2. / N), 2)*sin(omega*t)
@@ -178,59 +236,23 @@ void Udelta_t(com psai[2*N0-1], double t, double I, double omega, int N, double 
 	for (int i = 0; i < n; i++) {//构造系数矩阵(1+0.5*i*H*delta_t)
 		C[i][1] = 1. + C[i][1];
 	}
-
-	/*
-	delete[] psai;
-	psai = nullptr;
-	psai = solve_eq<n>(C, psai_temp);//开始计算
-	*/
 	com* temp_solve = solve_eq<n>(C, psai_temp);
 	for (int i = 0; i < n; i++) {
 		psai[i] = temp_solve[i];
 	}
 	delete[] temp_solve;
-	
+
 	delete[] C;
 	delete[] psai_temp;
-}
-
-
-//生成t=0的波函数
-template<int N0>
-com* generate_t0(double delta_x) {
-	//构造三对角型的系数矩阵A,装在C中
-	com (*C)[2]=new com[2*N0-1][2];
-	constexpr int n = 2 * N0 - 1;
-	C[0][0] = 0;
-	double x = -N0 * delta_x;
-	for (int i = 1; i < n; i++) {//构造非对角元
-		C[i][0] = -0.5 / pow(delta_x, 2);
-	}
-	for (int i = 0; i < n; i++) {//构造对角元
-		x += delta_x;
-		C[i][1] = 1 / pow(delta_x, 2) - 1 / sqrt(2 + pow(x, 2)) + 0.48;
-	}
-	//u 为初始向量
-	com* u = new com[n];
-	for (int i = 0; i < n; i++) {
-		u[i] = 1 / sqrt(2 * N0*delta_x);
-	}
-
-	eigen psai0 = inver_exp<N0>(C, u);
-	normalize<n>(psai0.vec,delta_x);
-	delete[] u,C;
-	return psai0.vec;
 }
 
 //求末态电离波函数(针对第(2)问)并且输出每一时刻的布居数
 com* generate_psaif() {
 
-	//x轴离散成2*N0个格子
-	constexpr int N0 = 16384;
-	//x间隔为delta_x
-	constexpr double delta_x = 0.1;
+	constexpr int N0 = 16384;//x轴离散成2*N0个格子
+	constexpr double delta_x = 0.1;//x间隔为delta_x
 	fstream os;
-	os.open( "temp2_Pt.txt" );
+	os.open("temp2_Pt.txt");
 	//初始化激光数据
 	double I = 1.;
 	double omega = 1.;
@@ -241,29 +263,28 @@ com* generate_psaif() {
 	//初态波函数
 	com* psai0 = generate_t0<N0>(delta_x);
 	//求末态波函数,并输出每一时刻的布居数
-	//!!!!!!!!com* psaif = generate_tf(tf, I, omega, N);
 	com* psaif = generate_t0<N0>(delta_x);
 	for (double t = 0; t < tf + delta_t; t += delta_t) {
-		Udelta_t<N0>(psaif, t, I, omega, N, delta_t,delta_x);//波函数传播
-		absorb<2 * N0 - 1>(psaif,delta_x);//乘吸收函数
+		Udelta_t<N0>(psaif, t, I, omega, N, delta_t, delta_x);//波函数传播
+		absorb<2 * N0 - 1>(psaif, delta_x);//乘吸收函数
 		//输出时间&布居数
 		com p = 0;
 		for (int i = 0; i < 2 * N0 - 1; i++) {
 			p += conj(psai0[i])*psaif[i] * delta_x;
 		}
-		os <<t<<"\t"<< abs(p)*abs(p)<<endl;
-		cout << t << endl;//!!!!!!!!!
+		os << t << "\t" << abs(p)*abs(p) << endl;
+		cout << t << endl;//(进程可视化)
 	}
 	//基态概率幅p
-	com p=0;
+	com p = 0;
 	for (int i = 0; i < 2 * N0 - 1; i++) {
-		p += conj(psai0[i])*psaif[i]*delta_x;
+		p += conj(psai0[i])*psaif[i] * delta_x;
 	}
-	cout << abs(p)*abs(p);//!!!!!!!!
 	//减去基态部分
 	for (int i = 0; i < 2 * N0 - 1; i++) {
 		psaif[i] = psaif[i] - p * psai0[i];
 	}
+
 	delete[] psai0;
 	return psaif;
 }
@@ -301,42 +322,15 @@ void test2() {
 	momentum_distribute();
 }
 
-//第1问测试函数
-void test1() {
-	//x轴离散成2*N0个格子
-	constexpr int N0 = 16384;
-	//x间隔为delta_x
-	constexpr double delta_x = 0.1;
-	fstream os;
-	os.open("temp1.txt");
-	//构造三对角型的系数矩阵A,装在C中
-	static com C[2 * N0 - 1][2];
-	constexpr int n = 2 * N0 - 1;
-	C[0][0] = 0;
-	double x = -N0 * delta_x;
-	for (int i = 1; i < n; i++) {//构造非对角元
-		C[i][0] = -0.5 / pow(delta_x, 2);
-	}
-	for (int i = 0; i < n; i++) {//构造对角元
-		x += delta_x;
-		C[i][1] = 1 / pow(delta_x, 2) - 1 / sqrt(2 + pow(x, 2))+0.48;
-	}
-	//u 为初始向量
-	com* u = new com[n];
-	for (int i = 0; i < n; i++) {
-		u[i] = 1 / sqrt(2 * N0*delta_x);
-	}
 
-	eigen psai0 = inver_exp<N0>(C, u);
-	normalize<n>(psai0.vec,delta_x);
-	x = -N0 * delta_x;
-	for (int i = 0; i < n; i++) {
-		x += delta_x;
-		os << x << "  " << pow(abs(psai0.vec[i]),2)<<endl;
-	}
-	cout << psai0.val << endl;
-	delete[] u;
-}
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//第三问
+
 
 //求电偶极矩和t的函数
 template<int N0>
@@ -361,18 +355,11 @@ com* generate_dt(int Ndata,double delta_x) {
 			dt[i] += conj(psai[j])*psai[j]*x * delta_x;
 		}
 		t += delta_t;
-		if (i % 100 == 0) {//!!!!!!!!!!!!!
+		if (i % 100 == 0) {//(进程可视化)
 			cout << i << endl;
 		}
 	}
-	//!!!!!!!!!!!
-	fstream otemp;
-	otemp.open("temp.txt");
-	double t_temp = 0;
-	for (int i = 0; i < Ndata; i++) {
-		otemp <<t_temp<<"\t"<< abs(dt[i]) << endl;
-		t_temp += delta_t;
-	}
+	
 	delete[] psai;
 	return dt;
 }
@@ -400,7 +387,7 @@ com* generate_at(int Ndata,double delta_x,double I,double omega300,int N) {
 			at[i] += conj(psai[j])*psai[j] *F* delta_x;
 		}
 		t += delta_t;
-		if (i % 100 == 0) {//!!!!!!!!!!!!!
+		if (i % 100 == 0) {//(进程可视化)
 			cout << i << endl;
 		}
 	}
@@ -446,14 +433,12 @@ void A_by_a() {
 	double omega300 = 45.5633525316 / 300;
 	int N = 48;
 	double tf = 2 * N*PI / omega300;
-	//x轴离散成2*N0个格子
-	constexpr int N0 = 16384;
-	//x间隔为delta_x
-	constexpr double delta_x = 0.1;
+	//迭代数据
+	constexpr int N0 = 16384;//x轴离散成2*N0个格子
+	constexpr double delta_x = 0.1;//x间隔为delta_x
 	fstream os;
-	os.open("temp3_a.txt");//!!!!!!!!!!!
-	//取4096个数据点
-	const int Ndata = 4096;
+	os.open("temp3_a.txt");
+	const int Ndata = 4096;//取4096个数据点
 	//求辐射谱
 	com* at = generate_at<N0>(Ndata,delta_x,I,omega300,N);
 	com* A = new com[Ndata];
@@ -476,43 +461,23 @@ void test3() {
 	//运行A_by_d();或A_by_a();
 	//A_by_d();
 	A_by_a();
-	//不要同时运行这两个函数,否则会出错
-}
-//第四问测试函数
-void test4() {
-	ofstream os4;
-	os4.open( "temp4.txt" );//!!!!!!!!!!!!!!!!!!!!
-	//初始化激光数据
-	double I = 0.01;
-	double omega400 = 45.5633525316 / 400;
-	int N = 4;
-	double tf = 2 * N*PI / omega400;
-	//迭代数据
-	constexpr int N0 = 16384;//取2N0-1个坐标点
-	double delta_x = 0.1;
-	int Ndata = 400;//取800个时间点!!!!!!!!!!!!!!!!!!!!!
-	double delta_t = tf / Ndata;
-	//输出的omega步长
-	double delta_omega = omega400 / 20;
-	//生成加速度
-	com* at = generate_at<N0>(Ndata, delta_x, I, omega400, N);
-	//输出功率谱
-	for (double omega = 0; omega < 20 * omega400; omega += delta_omega) {
-		for (double t0 = 0; t0 <= tf; t0 += delta_t) {
-			com A = 0;
-			double t = 0;
-			for (int i=0; i<Ndata;i++, t += delta_t) {
-				A += at[i] * pow(E, -com{ 0.,1. }*omega*t - pow((t - t0), 2) / 2 / 15 / 15)*delta_t;
-			}
-			os4 << t0 << "\t" << omega / omega400 << "\t" << log10(norm(A))<<endl;
-		}
-	}
+	//不需要同时运行这两个函数
 }
 
-//第四问测试函数
+
+
+
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+//第四问
+//第四问测试函数(用fft版本)
 void test4_usefft() {
 	ofstream os4;
-	os4.open("temp.txt");//!!!!!!!!!!!!!!!!!!!!
+	os4.open("temp4.txt");
 	//初始化激光数据
 	double I = 0.01;
 	double omega400 = 45.5633525316 / 400;
@@ -521,26 +486,13 @@ void test4_usefft() {
 	//迭代数据
 	constexpr int N0 = 16384;//取2N0-1个坐标点
 	double delta_x = 0.1;
-	constexpr int Ndata = 512;//取800个时间点!!!!!!!!!!!!!!!!!!!!!
+	constexpr int Ndata = 512;//取512个时间点
 	double delta_t = tf / Ndata;
 	//输出的omega步长
 	double delta_omega = omega400 / 20;
 	//生成加速度
 	com* at = generate_at<N0>(Ndata, delta_x, I, omega400, N);
 	//输出功率谱
-	/*
-	for (double omega = 0; omega < 20 * omega400; omega += delta_omega) {
-		
-
-		for (double t0 = 0; t0 <= tf; t0 += delta_t) {
-			com A = 0;
-			double t = 0;
-			for (int i = 0; i < Ndata; i++, t += delta_t) {
-				A += at[i] * pow(E, -com{ 0.,1. }*omega*t - pow((t - t0), 2) / 2 / 15 / 15)*delta_t;
-			}
-			os4 << t0 << "\t" << omega / omega400 << "\t" << log10(norm(A)) << endl;
-		}
-	}*/
 	for (int t0 = 0; t0 <= tf; t0 += tf / 20) {
 		com* a_temp = new com[Ndata];
 		com* result = new com[Ndata];
@@ -556,7 +508,7 @@ void test4_usefft() {
 			k++;
 		}
 		delete[] a_temp, result;
-		cout << t0 / tf * 20 << endl;//!!!!!!!!!
+		cout << t0 / tf * 20 << endl;//(进程可视化)
 	}
 	delete[] at;
 }
@@ -564,13 +516,11 @@ void test4_usefft() {
 
 
 int main() {
-	//testbug3();
-	test4_usefft();
+	//test1();
+	//test2();
+	//test3();
+	//test4_usefft();
 	system("pause");
-	;
-	;
-	;
-	;//测试3
 }
 
 
