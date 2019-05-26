@@ -400,11 +400,11 @@ void A_by_d() {
 	//x轴离散成2*N0个格子
 	constexpr int N0 = 16384;
 	//x间隔为delta_x
-	constexpr double delta_x = 0.1;
+	constexpr double delta_x = 0.2;
 	fstream os;
 	os.open("temp3_d.txt");
-	//取4096个数据点
-	const int Ndata = 4096;
+	//取4096*2个数据点
+	const int Ndata = 4096*16;
 	//激光数据
 	int N = 48;
 	double omega300 = 45.5633525316 / 300;
@@ -438,7 +438,7 @@ void A_by_a() {
 	constexpr double delta_x = 0.1;//x间隔为delta_x
 	fstream os;
 	os.open("temp3_a.txt");
-	const int Ndata = 4096;//取4096个数据点
+	const int Ndata = 4096*4;//取4096*4个数据点
 	//求辐射谱
 	com* at = generate_at<N0>(Ndata,delta_x,I,omega300,N);
 	com* A = new com[Ndata];
@@ -459,8 +459,8 @@ void A_by_a() {
 //第3问测试函数
 void test3() {
 	//运行A_by_d();或A_by_a();
-	//A_by_d();
-	A_by_a();
+	A_by_d();
+	//A_by_a();
 	//不需要同时运行这两个函数
 }
 
@@ -518,7 +518,7 @@ void test4_usefft() {
 int main() {
 	//test1();
 	//test2();
-	//test3();
+	test3();
 	//test4_usefft();
 	system("pause");
 }
